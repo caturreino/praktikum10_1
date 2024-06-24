@@ -1,77 +1,70 @@
-import requests
 import streamlit as st
+import sqlite3
 
-class NewsAPI:
-    def __init__(self):
-        self.api_key = st.secrets["news_api_key"]
-        self.base_url = "https://newsapi.org/v2/"
+# Fungsi untuk menghubungkan ke database SQLite
+def create_connection(db_file):
+    conn = None
+    try:
+        conn = sqlite3.connect(db_file)
+    except sqlite3.Error as e:
+        st.error(f"Error connecting to database: {e}")
+    return conn
 
-    def get_top_headlines(self, country='us', category=None):
-        url = f"{self.base_url}top-headlines"
-        params = {
-            'apiKey': self.api_key,
-            'country': country
-        }
+# Fungsi untuk membuat tabel di database
+def create_table(conn):
+    try:
+        sql_create_table = """ CREATE TABLE IF NOT EXISTS users (
+                                    id INTEGER PRIMARY KEY,
+                                    name TEXT NOT NULL,
+                                    age INTEGER NOT NULL
+                                ); """
+        conn.execute(sql_create_table)
+    except sqlite3.Error as e:
+        st.error(f"Error creating table: {e}")
 
-        if category:
-            params['category'] = category
-        response = requests.get(url, params=params)
-        return response.json()
-    
-def get_everything(self, query, from_date=None, to_date=None, language='en'):
-    url = f"{self.base_url}everything"
-    params = {
-        'apiKey': self.api_key,
-        'q': query,
-        'language': language
-    }
-    if from_date:
-        params['from'] = from_date
-    if to_date:
-        params['to'] = to_date
-    response = requests.get(url, params=params)
-    return response.json()
+# Fungsi untuk menyimpan data ke database
+def insert_data(conn, user):
+    try:
+        sql_insert = ''' INSERT INTO users(name, age)
+                         VALUES(?,?) '''
+        cur = conn.cursor()
+        cur.execute(sql_insert, user)
+        conn.commit()
+    except sqlite3.Error as e:
+        st.error(f"Error inserting data: {e}")
 
-def get_sources(self, category=None, language='en', country=None):
-    url = f"{self.base_url}sources"
-    params = {
-        'apiKey': self.api_key,
-        'language': language
-    }
-    if category:
-        params['category'] = category
-    if country:
-        params['country'] = country
-    response = requests.get(url, params=params)
-    return response.json()
+# Koneksi ke database
+database = "example.db"
+conn = create_connection(database)
 
-# Streamlit UI
-st.title("News API Explorer")
+# Buat tabel jika belum ada
+if conn:
+    create_table(conn)
 
-news_api = NewsAPI()
+# Judul aplikasi
+st.title("Simple User Input to Database")
 
-st.header("Top Headlines")
-country = st.text_input("Country Code", value='us')
-category = st.text_input("Category (optional)")
-if st.button("Get Top Headlines"):
-    headlines = news_api.get_top_headlines(country, category)
-    st.json(headlines)
+# Input dari pengguna
+name = st.text_input("Enter your name:")
+age = st.number_input("Enter your age:", min_value=0, step=1)
 
-st.header("Everything")
+# Tombol untuk menyimpan data
+if st.button("Submit"):
+    if name and age:
+        insert_data(conn, (name, age))
+        st.success("Data successfully saved to database!")
 
-query = st.text_input("Query")
-from_date = st.text_input("From Date (YYYY-MM-DD, optional)")
-to_date = st.text_input("To Date (YYYY-MM-DD, optional)")
-language = st.text_input("Language", value='en')
-if st.button("Get Everything"):
-    everything = news_api.get_everything(query, from_date, to_date, language)
-    st.json(everything)
+# Tampilkan data dari database
+if st.button("Show Data"):
+    if conn:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM users")
+        rows = cur.fetchall()
+        for row in rows:
+            st.write(f"ID: {row[0]}, Name: {row[1]}, Age: {row[2]}")
+    else:
+        st.error("No connection to database.")
 
-st.header("Sources")
-category = st.text_input("Category (optional)", key="sources_category")
-language = st.text_input("Language", value='en', key="sources_language")
-country = st.text_input("Country Code (optional)", key="sources_country")
-if st.button("Get Sources"):
-    sources = news_api.get_sources(category, language, country)
-    st.json(sources)
-
+# Tutup koneksi database
+if conn:
+    conn.close()
